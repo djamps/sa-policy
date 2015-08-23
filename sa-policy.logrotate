@@ -1,0 +1,5 @@
+/var/log/sa-policy.log {
+    weekly
+    notifempty
+    missingok
+}

@@ -1,0 +1,10 @@
+# Update DB info then lace this file in /etc/postfix then add the following to main.cf 
+# just under the smtpd_recipient_restrictions line (without the hash tag):
+# check_client_access mysql:/etc/postfix/mysql-sa-policy.cf,
+
+user = dbuser
+password = dbpass
+dbname = dbname
+query = SELECT '450 Abuse detected - Try again later' FROM sa_policy_blacklist WHERE ip = '%s' AND expires > NOW()
+hosts = dbhost
+

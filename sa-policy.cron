@@ -1,0 +1,2 @@
+MAILTO=""
+* * * * * root /opt/sa-policy/sa-policy.pl & >/dev/null 2>&1
