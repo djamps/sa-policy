@@ -21,7 +21,7 @@ Keep your logs rotated by copying this to `/etc/logrotate.d`.
 Copy this to `/etc/cron.d` to keep the daemon running (in case the DB goes down, reboot, ect).
 
 ##### mysql-sa-policy.cf
-Place this in `/etc/postfix`.   You also need to place the following just under `smtpd_recipient_restrictions` (top of the list) in your `main.cf`:
+Edit the DB parameters and lace this in `/etc/postfix`.   You also need to place the following just under `smtpd_recipient_restrictions` (top of the list) in your `main.cf`:
 
 `check_client_access mysql:/etc/postfix/mysql-sa-policy.cf,`
 
