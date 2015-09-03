@@ -1,6 +1,8 @@
 # SpamAssassin Policy Daemon (for Amavis/Maia and Postfix)
 
-This simple spamassassin policy daemon watches your Postfix maillog for obvious spammers and temporarily bans their IP's with 450 (defer) responses via Postfix.   This tool will SIGNIFICANLY reduce stress and increase stability on your spam filtering nodes by preventing needless scanning of obvious spam mail.
+This simple spamassassin policy daemon watches your Postfix maillog for obvious spammers and temporarily bans their IP's with 450 (defer) responses via Postfix.   This tool will SIGNIFICANLY reduce stress and increase stability on your spam filtering nodes by reducing the needless scanning of obvious spam mail.
+
+Even more, sa-policy is an excellent replacement for greylisting.   Achieve similar results WITHOUT delaying legitimate mail (and upsetting your customers!).
 
   - Blacklist is temporary (450 DEFER) - you configure the length of time
   - Blacklist and host stats are stored in MySQL
