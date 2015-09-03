@@ -143,7 +143,7 @@ while (defined(my $line=$file->read)) {
 sub log_stats{
     $log->debug("$stat->{blacklisted} new blacklistings, $stat->{SPAM} spam, $stat->{HAM} ham");
     if ($stat->{expired_blacklist} > 0 || $stat->{expired_log} > 0) {
-        $log->debug("Purged $stat->{expired_log} log entries and $stat->{expired_blacklist} blacklist entries");
+        $log->debug("Purged $stat->{expired_log} log entries, $stat->{expired_blacklist} blacklist entries, and $stat->{expired_stats} host stats");
     }
     &init_stats;
 }
@@ -154,12 +154,13 @@ sub init_stats{
         SPAM=>0,
         HAM=>0,
         expired_blacklist=>0,
-        expired_log=>0
+        expired_log=>0,
+        expired_stats=>0
     };
 }
 
 sub purge_tables{
-    ## Delete old log records to keep the table from growing too large
+    ## Delete old log records
     my $sql = "DELETE FROM sa_policy_log WHERE time < NOW() - INTERVAL ? SECOND;";
     my $sth = $dbh->prepare($sql)
       || die "Error:" . $dbh->errstr . "\n";
@@ -168,7 +169,7 @@ sub purge_tables{
     if (my $n = $sth->rows) {
         $stat->{expired_log}=$stat->{expired_log}+$n;
     }
-    ## Delete expired blacklistings to keep the table from growing too large 
+    ## Delete expired blacklistings
     $sql = "DELETE FROM sa_policy_blacklist WHERE expires < NOW() - INTERVAL ? SECOND;";
     $sth = $dbh->prepare($sql)
       || die "Error:" . $dbh->errstr . "\n";
@@ -176,6 +177,15 @@ sub purge_tables{
       ||  die "Error:" . $sth->errstr . "\n";
     if (my $n = $sth->rows) {
         $stat->{expired_blacklist}=$stat->{expired_blacklist}+$n;
+    }
+    ## Delete old stat records of hosts not seen lately
+    $sql = "DELETE FROM sa_policy_stats WHERE last_seen < NOW() - INTERVAL ? SECOND;";
+    $sth = $dbh->prepare($sql)
+      || die "Error:" . $dbh->errstr . "\n";
+    $sth->execute($config->{purge_age})
+      ||  die "Error:" . $sth->errstr . "\n";
+    if (my $n = $sth->rows) {
+        $stat->{expired_stats}=$stat->{expired_stats}+$n;
     }
 }
 
