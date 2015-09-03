@@ -30,4 +30,5 @@ Place this into `/opt/sa-policy` and edit the top section to your liking.   The 
 
 ##### regex.custom.pm (optional)
 Some spammers react poorly to the 450 defers and will hammer your server excessively (up to 1000/min per host in some cases).  If you are using CSF firewall, you can drop this into `/etc/csf/` to temporarily block this hammering in IPTABLES and keep the postfix logs from filling up with excessive 450's.
-NOTE: You also need to edit /etc/csf/csf.conf towards the end and set `CUSTOM1_LOG` to `/var/log/maillog`.
+
+NOTE: You also need to edit `/etc/csf/csf.conf` towards the end and set `CUSTOM1_LOG` to `/var/log/maillog`.
