@@ -27,3 +27,7 @@ Edit the DB parameters and place this in `/etc/postfix`.   You also need to plac
 
 ##### sa-policy.pl
 Place this into `/opt/sa-policy` and edit the top section to your liking.   The primary parameters (other than the DB credentials) are `spam_score` and `max_spam_per_interval`.   You should set `spam_score` to the minimum level which you feel is definately spam to prevent false positives.   `max_spam_per_interval` is the number of messages with a score higher than `spam_score` during the `spam_interval` which will trigger a temporary blacklisting.
+
+##### regex.custom.pm (optional)
+Some spammers react poorly to the 450 defers and will hammer your server excessively (up to 1000/min per host in some cases).  If you are using CSF firewall, you can drop this into `/etc/csf/` to temporarily block this hammering in IPTABLES and keep the postfix logs from filling up with excessive 450's.
+NOTE: You also need to edit /etc/csf/csf.conf towards the end and set `CUSTOM1_LOG` to `/var/log/maillog`.
