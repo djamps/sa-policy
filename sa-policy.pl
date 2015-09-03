@@ -28,7 +28,7 @@ use DBI;
 use Log::Log4perl;
 use Fcntl qw(:flock);
 
-my $VERSION = "1.0";
+my $VERSION = "1.0.1";
 my $DEBUG = 0;
 
 ## Only allow once instance!   todo: make it less hacky
