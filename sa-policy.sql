@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS `sa_policy_log` (
   `hits` decimal(6,3) NOT NULL,
   `time` datetime NOT NULL,
   KEY `time` (`time`),
-  KEY `ip` (`ip`)
+  KEY `ip_hits` (`ip`,`hits`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
 
