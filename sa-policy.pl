@@ -50,6 +50,7 @@ $config->{maillog_path} = '/var/log/maillog'; # Path to postfix maillog
 $config->{log_file} = '/var/log/sa-policy.log'; # Path for logfile
 $config->{debug} = 1;
 $config->{debug_interval} = 30; # Interval between stats in logfile
+$config->{infected_is_spam} = 1; # Treat viruses as SPAM and blacklist accordingly
 
 ## The following settings only matter on the primary node (primary = 1)
 $config->{purge_age} = 86400; # Purge log records older than n seconds
@@ -129,7 +130,7 @@ while (defined(my $line=$file->read)) {
     next if !($line =~ m/(Blocked SPAM|Passed CLEAN|Blocked INFECTED)/);
     my $class = ($line =~ m/Passed CLEAN/)?"HAM":"SPAM";
     $stat->{$class}++;
-    my $hits = 0;
+    my $hits = $config->{infected_is_spam}?999:0;
     my $ip;
     $line =~ m/Hits: (\d+\.?\d*)/ and $hits = $1;
     $line =~ /\[((\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}))\]/ and $ip = $1;
