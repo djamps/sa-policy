@@ -28,7 +28,7 @@ use DBI;
 use Log::Log4perl;
 use Fcntl qw(:flock);
 
-my $VERSION = "1.0.1";
+my $VERSION = "1.0.2";
 my $DEBUG = 0;
 
 ## Only allow once instance!   todo: make it less hacky
@@ -56,7 +56,7 @@ $config->{infected_is_spam} = 1; # Treat viruses as SPAM and blacklist according
 $config->{purge_age} = 86400; # Purge log records older than n seconds
 $config->{purge_interval} = 1800; # Purge old records every n seconds
 $config->{process_interval} = 30; # Look for new IP bans every n seconds
-$config->{spam_score} = 9; # Minimum score to consider for blacklisting
+$config->{spam_score} = 6; # Minimum score to consider for blacklisting
 $config->{max_spam_per_interval} = 5;  #  n spams per interval = ban time
 $config->{spam_interval} = 600; # Interval of n seconds
 $config->{blacklist_time} = 1800; # Blacklist IPs for n seconds (multiplied each time a ban reoccurs)
@@ -129,10 +129,14 @@ while (defined(my $line=$file->read)) {
 
     next if !($line =~ m/(Blocked SPAM|Passed CLEAN|Blocked INFECTED)/);
     my $class = ($line =~ m/Passed CLEAN/)?"HAM":"SPAM";
+    my $hits = 0;
+    if ( $line =~ m/Blocked INFECTED/ && $config->{infected_is_spam} ) {
+        $hits = 999;
+    } else {
+        $line =~ m/Hits: (\d+\.?\d*)/ and $hits = $1;
+    }
     $stat->{$class}++;
-    my $hits = $config->{infected_is_spam}?999:0;
     my $ip;
-    $line =~ m/Hits: (\d+\.?\d*)/ and $hits = $1;
     $line =~ /\[((\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}))\]/ and $ip = $1;
     $line =~ /\[(([0-9a-fA-F]{4}|0)(\:([0-9a-fA-F]{4}|0)){7})\]/ and $ip = $1;
     ## Local deliveries don't have an IP, skip these
