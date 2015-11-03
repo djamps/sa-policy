@@ -28,52 +28,26 @@ use DBI;
 use Log::Log4perl;
 use Fcntl qw(:flock);
 use Net::CIDR;
+use Getopt::Long;
+use Config::Simple;
 
-my $VERSION = "1.0.3";
+my $VERSION = "1.1.0";
 
 ## Only allow once instance!   todo: make it less hacky
 unless (flock(DATA, LOCK_EX|LOCK_NB)) {
     die "$0 is already running. Exiting.\n";
 }
 
-my $config;
-
-$config->{mysql_host} = 'host';
-$config->{mysql_port} = 3306;
-$config->{mysql_user} = 'user';
-$config->{mysql_password} = 'pass';
-$config->{mysql_db} = 'db';
-
-# Basic settings
-$config->{primary} = 1; # Set to 1 on primary node, 0 on all other nodes
-$config->{maillog_path} = '/var/log/maillog'; # Path to postfix maillog
-$config->{log_file} = '/var/log/sa-policy.log'; # Path for logfile
-$config->{debug} = 1;
-$config->{debug_interval} = 30; # Interval between stats in logfile
-$config->{infected_is_spam} = 1; # Treat viruses as SPAM and blacklist accordingly
-
-# IP's and ranges that should never be blacklisted
-my @whitelist = Net::CIDR::cidradd(
-    "10.0.0.0/8",
-    "192.168.0.0/16",
-    "127.0.0.0/8"
-);
-
-## The following settings only matter on the primary node (primary = 1)
-$config->{purge_age} = 86400; # Purge log records older than n seconds
-$config->{purge_interval} = 1800; # Purge old records every n seconds
-$config->{process_interval} = 30; # Look for new IP bans every n seconds
-$config->{spam_score} = 6; # Minimum score to consider for blacklisting
-$config->{max_spam_per_interval} = 5;  #  n spams per interval = ban time
-$config->{spam_interval} = 600; # Interval of n seconds
-$config->{blacklist_time} = 1800; # Blacklist IPs for n seconds (multiplied each time a ban reoccurs)
-
-## Do not touch anything below
+my $cfgfile  = "/etc/sa-policy.conf";
+GetOptions ("config=s" => \$cfgfile);
+my $cfg = new Config::Simple($cfgfile) or die "Error opening $cfgfile";
+my $config = $cfg->vars();
+my @whitelist = @{$config->{'master.whitelist'}};
 
 ## Init logger
 my $log_conf ="  log4perl.rootLogger   = DEBUG, LOGFILE, STDOUT
    log4perl.appender.LOGFILE           = Log::Log4perl::Appender::File
-   log4perl.appender.LOGFILE.filename  = $config->{log_file}
+   log4perl.appender.LOGFILE.filename  = $config->{'main.log_file'}
    log4perl.appender.LOGFILE.mode      = append
    log4perl.appender.LOGFILE.recreate  = 1
    log4perl.appender.LOGFILE.layout    = Log::Log4perl::Layout::PatternLayout
@@ -101,35 +75,35 @@ $SIG{__DIE__} = sub {
 $log->info("$0 $VERSION starting");
 
 ## Connect to DB
-my $dsn = "DBI:mysql:database=$config->{mysql_db};host=$config->{mysql_host};port=$config->{mysql_port}";
-my $dbh = DBI->connect($dsn, $config->{mysql_user}, $config->{mysql_password})
+my $dsn = "DBI:mysql:database=$config->{'mysql.db'};host=$config->{'mysql.host'};port=$config->{'mysql.port'}";
+my $dbh = DBI->connect($dsn, $config->{'mysql.user'}, $config->{'mysql.password'})
   || die "MySQL connection failed";
 $log->info("DB connected");
 
 my $last_purge = 0;
 my $last_process = 0;
-my $last_debug = time() + $config->{debug_interval};
+my $last_debug = time() + $config->{'main.debug_interval'};
 my $stat = {};
 &init_stats;
 
-my $file=File::Tail->new($config->{maillog_path});
+my $file=File::Tail->new($config->{'main.maillog_path'});
 while (defined(my $line=$file->read)) {
 
     # Checkif we need to purge old records
     my $time = time();
-    if ($config->{primary} && $last_purge < $time - $config->{purge_interval}) {
+    if ($config->{'main.master'} && $last_purge < $time - $config->{'master.purge_interval'}) {
         &purge_tables();
         $last_purge = $time;
     }
 
     # Check if we need to create bans
-    if ($config->{primary} && $last_process < $time - $config->{process_interval}) {
+    if ($config->{'main.master'} && $last_process < $time - $config->{'master.process_interval'}) {
         &process_log();
         $last_process = $time;
     }
 
     # Check if we need to log stats
-    if ($last_debug < $time - $config->{debug_interval}) {
+    if ($last_debug < $time - $config->{'main.debug_interval'}) {
         &log_stats();
         $last_debug = $time;
     }
@@ -137,7 +111,7 @@ while (defined(my $line=$file->read)) {
     next if !($line =~ m/(Blocked SPAM|Passed CLEAN|Blocked INFECTED)/);
     my $class = ($line =~ m/Passed CLEAN/)?"HAM":"SPAM";
     my $hits = 0;
-    if ( $line =~ m/Blocked INFECTED/ && $config->{infected_is_spam} ) {
+    if ( $line =~ m/Blocked INFECTED/ && $config->{'master.infected_is_spam'} ) {
         $hits = 999;
     } else {
         $line =~ m/Hits: (\d+\.?\d*)/ and $hits = $1;
@@ -176,7 +150,7 @@ sub purge_tables{
     my $sql = "DELETE FROM sa_policy_log WHERE time < NOW() - INTERVAL ? SECOND;";
     my $sth = $dbh->prepare($sql)
       || die "Error:" . $dbh->errstr . "\n";
-    $sth->execute($config->{purge_age})
+    $sth->execute($config->{'master.purge_age'})
       ||  die "Error:" . $sth->errstr . "\n";
     if (my $n = $sth->rows) {
         $stat->{expired_log}=$stat->{expired_log}+$n;
@@ -185,7 +159,7 @@ sub purge_tables{
     $sql = "DELETE FROM sa_policy_blacklist WHERE expires < NOW() - INTERVAL ? SECOND;";
     $sth = $dbh->prepare($sql)
       || die "Error:" . $dbh->errstr . "\n";
-    $sth->execute($config->{purge_age})
+    $sth->execute($config->{'master.purge_age'})
       ||  die "Error:" . $sth->errstr . "\n";
     if (my $n = $sth->rows) {
         $stat->{expired_blacklist}=$stat->{expired_blacklist}+$n;
@@ -194,7 +168,7 @@ sub purge_tables{
     $sql = "DELETE FROM sa_policy_stats WHERE last_seen < NOW() - INTERVAL ? SECOND;";
     $sth = $dbh->prepare($sql)
       || die "Error:" . $dbh->errstr . "\n";
-    $sth->execute($config->{purge_age})
+    $sth->execute($config->{'master.purge_age'})
       ||  die "Error:" . $sth->errstr . "\n";
     if (my $n = $sth->rows) {
         $stat->{expired_stats}=$stat->{expired_stats}+$n;
@@ -210,7 +184,8 @@ sub process_log{
         HAVING count(ip) >= ?;";
     my $sth = $dbh->prepare($sql)
       || die "Error:" . $dbh->errstr . "\n";
-    $sth->execute($config->{spam_interval},$config->{spam_score},$config->{max_spam_per_interval})
+      
+    $sth->execute($config->{'master.spam_interval'},$config->{'master.spam_score'},$config->{'master.max_spam_per_interval'})
       ||  die "Error:" . $sth->errstr . "\n";
 
     while (my @row = $sth->fetchrow) {
@@ -236,11 +211,11 @@ sub process_log{
             WHERE ip = ? AND expires <= NOW();";
         $sth2 = $dbh->prepare($sql)
           || die "Error:" . $dbh->errstr . "\n";
-        $sth2->execute($row[1],$config->{blacklist_time},$row[0])
+        $sth2->execute($row[1],$config->{'master.blacklist_time'},$row[0])
           ||  die "Error:" . $sth->errstr . "\n";
 
         if ($sth2->rows > 0) {
-            $log->info("Blacklisted $row[0] for $row[1] spam messages in the last $config->{spam_interval} seconds");
+            $log->info("Blacklisted $row[0] for $row[1] spam messages in the last $config->{'master.spam_interval'} seconds");
             $stat->{blacklisted}++;
         }
 
