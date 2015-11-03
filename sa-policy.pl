@@ -27,9 +27,9 @@ use File::Tail;
 use DBI;
 use Log::Log4perl;
 use Fcntl qw(:flock);
+use Net::CIDR;
 
-my $VERSION = "1.0.2";
-my $DEBUG = 0;
+my $VERSION = "1.0.3";
 
 ## Only allow once instance!   todo: make it less hacky
 unless (flock(DATA, LOCK_EX|LOCK_NB)) {
@@ -51,6 +51,13 @@ $config->{log_file} = '/var/log/sa-policy.log'; # Path for logfile
 $config->{debug} = 1;
 $config->{debug_interval} = 30; # Interval between stats in logfile
 $config->{infected_is_spam} = 1; # Treat viruses as SPAM and blacklist accordingly
+
+# IP's and ranges that should never be blacklisted
+my @whitelist = Net::CIDR::cidradd(
+    "10.0.0.0/8",
+    "192.168.0.0/16",
+    "127.0.0.0/8"
+);
 
 ## The following settings only matter on the primary node (primary = 1)
 $config->{purge_age} = 86400; # Purge log records older than n seconds
@@ -207,7 +214,10 @@ sub process_log{
       ||  die "Error:" . $sth->errstr . "\n";
 
     while (my @row = $sth->fetchrow) {
-
+        if (Net::CIDR::cidrlookup($row[0], @whitelist)) {
+            $log->debug("Not blacklisting ".$row[0]." due to whitelist");
+            next;
+        }
         ## Create the blacklist entry
         $sql = "INSERT IGNORE INTO sa_policy_blacklist (ip) VALUES (?);";
         my $sth2 = $dbh->prepare($sql)
