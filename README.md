@@ -13,6 +13,9 @@ Even more, sa-policy is an excellent replacement for greylisting.   Achieve simi
 
 The installation and files should be self-explanitory.
 
+##### sa-policy.conf
+Change the DB credentials and other settings as needed.   By default, we look in `/etc/` for this file but you can specify it elsewhere with the -c argument.
+
 ##### sa-policy.sql
 Create your tables by executing `mysql <dbname> < sa-policy.sql`
 
